@@ -64,7 +64,7 @@ meta <- meta %>%
   dplyr::filter_all(all_vars(!grepl('ummy', .))) %>% # getting rid of Dummys/dummys
   dplyr::filter_all(all_vars(!grepl("lah", .)))  %>% # getting rid of blah blahs
   dplyr::mutate(CreationDate = parse_date_time(CreationDate, c("mdY IMS p"))) %>% # making POSIX
-  dplyr::mutate(tDate = as.Date(as.character(as.Date(substr(CreationDate, 1, 10), "%Y-%m-%d"))))
+  dplyr::mutate(mDate = as.Date(as.character(as.Date(substr(CreationDate, 1, 10), "%Y-%m-%d"))))
 
 use <- use %>%
   dplyr::rename(uObjID = OBJECTID,
@@ -74,7 +74,7 @@ use <- use %>%
   dplyr::filter_all(all_vars(!grepl('ummy', .))) %>% # getting rid of Dummys/dummys
   dplyr::filter_all(all_vars(!grepl("lah", .))) %>% # getting rid of blah blahs
   dplyr::mutate(CreationDate = parse_date_time(CreationDate, c("mdY IMS p"))) %>% # making POSIX
-  dplyr::mutate(Date = as.Date(as.character(as.Date(substr(CreationDate, 1, 10), "%Y-%m-%d"))))
+  dplyr::mutate(uDate = as.Date(as.character(as.Date(substr(CreationDate, 1, 10), "%Y-%m-%d"))))
 
 avidity <- avidity %>%
   rename(aObjID = OBJECTID,
@@ -84,7 +84,7 @@ avidity <- avidity %>%
   dplyr::filter_all(all_vars(!grepl('ummy', .))) %>% # getting rid of Dummys/dummys
   dplyr::filter_all(all_vars(!grepl("lah", .))) %>% # getting rid of blah blahs
   dplyr::mutate(CreationDate = parse_date_time(CreationDate, c("mdY IMS p"))) %>% # making POSIX
-  dplyr::mutate(Date = as.Date(as.character(as.Date(substr(CreationDate, 1, 10), "%Y-%m-%d"))))
+  dplyr::mutate(aDate = as.Date(as.character(as.Date(substr(CreationDate, 1, 10), "%Y-%m-%d"))))
 
 #### Join Data Together ####
 # In a complete survey with 2 uses you would expect a 1:2:1 ratio of meta:use:avidity observations - when theses are joined you would expect this to become two observations with the meta and avidity duplicated. 
@@ -97,19 +97,20 @@ avidity <- avidity %>%
 
 
 MetaUse <- full_join(meta, use, by = c("mGlobID" = "uGUID"), keep=T) %>% 
-  mutate(mObjID = ifelse(tDate < "2018-08-08", NA, mObjID))
+  mutate(mObjID = ifelse(mDate < "2018-08-08", NA, mObjID))
 
-Full <- full_join(MetaUse, avidity, by = c("uGlobID" = "aGUID"), keep=T) %>%
-  rename(nDate = Date)
+Full <- full_join(MetaUse, avidity, by = c("uGlobID" = "aGUID"), keep=T) %>% 
+  dplyr::select(-Date)
 
 SBFull <- Full%>%
-  dplyr::filter(tDate < "2018-08-08" | tDate>"2021-09-27" & !str_detect(REQUIRED..Boat.ramp.transect.name, "Exmouth|Bundegi|Tantabiddi|CoralBay"))
+  rename(Date = "CreationDate.x") %>% 
+  dplyr::filter(Date < "2018-08-08" | Date >"2021-09-27" & !str_detect(REQUIRED..Boat.ramp.transect.name, "Exmouth|Bundegi|Tantabiddi|CoralBay"))
 
 #### Selecting Relevant Variables ####
 
 ## Renaming and selecting variables from Harrison's survey
 SB_H <- SBFull %>% 
-  filter(tDate < "2018-08-08") %>% 
+  filter(Date < "2018-08-08") %>% 
   mutate(FieldTrip=1) %>% 
   dplyr::rename(Interviewer = "Interviewer_name",
                 BR = "Boat_ramp_location", 
@@ -134,13 +135,13 @@ SB_H <- SBFull %>%
                 FinalComments = "Comments",
                 PersonID = "mObjID")
 SB_H <- SB_H %>% 
-  dplyr::select(PersonID, nDate, CreationDate.x, FieldTrip, Interviewer, BR, Agreement, BRLong, BRLat, FishingType, BaitLure, exStart, exStop, MaxHook, 
+  dplyr::select(PersonID, Date, FieldTrip, Interviewer, BR, Agreement, BRLong, BRLat, FishingType, BaitLure, exStart, exStop, MaxHook, 
          KeptUndam, nDP, Species, UseLong, UseLat, exnTimes12m, exYrs, Postcode, BoatLength, BoatID, FinalComments)
 
 
 ## Renaming and selectingvariables from my surveys
 SB_C <- SBFull %>% 
-  filter(tDate > "2021-09-27") %>% 
+  filter(Date > "2021-09-27") %>% 
   mutate(FieldTrip=2) %>% 
   dplyr::rename(Interviewer = "REQUIRED..Interviewer",
                 BR = "REQUIRED..Boat.ramp.transect.name",
@@ -215,7 +216,7 @@ SB_C <- SBFull %>%
                 nGirls = "Number.of.girls"
                 ) %>%
   
-  dplyr::select(PersonID, nDate, CreationDate.x, Interviewer, FieldTrip, BR, BRLat, BRLong, Site, Screen18,
+  dplyr::select(PersonID, Date, Interviewer, FieldTrip, BR, BRLat, BRLong, Site, Screen18,
                 PrevInter, Agreement, nDaysInArea, nDaysInArea_other, BoatAccess,
                 nBoatDays, nBoatDays_other, nShoreDays, nShoreDays_other, nTimesLast12m,
                 nTimesLast12m_other, nTimes19, nTimes19_other, Covid,
@@ -258,13 +259,15 @@ SB_Dat <- SB_Dat %>%
 
 # The date/time survey was conducted.
 SB_Dat <- SB_Dat %>%
-  rename(DateTime = "CreationDate.x") %>% 
-  rename(Date = "nDate") %>% 
+  dplyr::mutate(DateTime = Date) %>%
+  # dplyr::mutate(Date = as.Date(ifelse(!is.na(DateTime), as.character(as.Date(substr(DateTime, 1, 10), "%Y-%m-%d")),
+  #                                     as.character(as.Date(jDate, "%d/%m/%Y"))), "%Y-%m-%d")) %>%
   dplyr::mutate(numYear = as.numeric(substr(Date, 1, 4))) %>%
   dplyr::mutate(facYear = as.factor(numYear)) %>% # Doing this after filter so 2018 is not a level
   dplyr::mutate(DateTime = with_tz(DateTime, "Australia/Perth")) %>%
-  dplyr::mutate(Time = ifelse(!is.na(DateTime), as.character(substr(DateTime, 12, 16)), DateTime)) %>%
+  dplyr::mutate(Time = ifelse(!is.na(DateTime), as.character(substr(DateTime, 12, 16)), NA)) %>%
   dplyr::relocate(Date, numYear, facYear, Time, .after = PersonID) %>%
+  dplyr::select(-c(DateTime)) %>%
   dplyr::mutate(Date = as.Date(Date))
 
 ## Recall date for both extractive and non-extractive activities need to be done at the beginning SBFull in order to make correct TripNum, where a trip is defined as each date associated with a PersonID. 
@@ -410,6 +413,7 @@ SB_Dat <- SB_Dat %>%
   mutate(BoatName = ifelse(BoatName != "Oryx II", str_to_title(BoatName), BoatName)) %>% 
   mutate(BoatName = ifelse(BoatName=="Delta", "Delta 057", BoatName)) %>% 
   mutate(BoatID = ifelse(BoatID=="057", NA, BoatID)) %>% 
+  mutate(BoatID = ifelse(Comments %in% c("Same guy as 26050"), "26050", BoatID)) %>% 
   mutate(BoatID = toupper(BoatID)) %>%
   mutate(BoatID = ifelse(BoatID=="", NA, BoatID)) %>% 
   mutate(BoatName = ifelse(BoatName=="", NA, BoatName)) %>% 
@@ -448,6 +452,10 @@ SB_Dat <- SB_Dat %>%
   dplyr::mutate(FieldTrip = as.numeric(FieldTrip))
 
 #### Information about the participants ####
+
+## Remove Charters
+SB_Dat <- SB_Dat %>% 
+  filter(!grepl("Top gun|charter", Comments))
 
 ## Resident/ Non-Resident 
 # Participants have been classed as residents if they are have any reason to have a deeper familiarity with the area than visitors, so includes semi residents that perhaps have a house up in Exmouth 
@@ -522,11 +530,12 @@ SB_Dat <- SB_Dat %>%
 
 SB_Dat <- SB_Dat %>% 
   mutate(FishingType = ifelse(FishingType_other %in% c("Crabbed", "Crabbing", "Crabbing "), "Crabbing", FishingType)) %>% 
-  mutate(FishingType = ifelse(FishingType_other %in% "Cockling", "Cockeling", FishingType)) %>% 
-  mutate(FishingType = ifelse(FishingType_other %in% "Squidding", "Squidding", FishingType)) %>% 
-  mutate(FishingType = ifelse(FishingType_other %in% "Fly fishing", "Casting", FishingType)) %>% 
-  mutate(FishingType = ifelse(FishingType_other %in% "Diving for crays", "Crayfish Diving", FishingType)) %>% 
-  mutate(FishingType = as.factor(FishingType))
+  mutate(FishingType = ifelse(FishingType_other %in% c("Cockling"), "Cockeling", FishingType)) %>% 
+  mutate(FishingType = ifelse(FishingType_other %in% c("Squidding"), "Squidding", FishingType)) %>% 
+  mutate(FishingType = ifelse(FishingType_other %in% c("Fly fishing"), "Casting", FishingType)) %>% 
+  mutate(FishingType = ifelse(FishingType_other %in% c("Diving for crays"), "Crayfish Diving", FishingType)) %>% 
+  mutate(FishingType = ifelse(str_detect(Comments, "Crabbing|crabbing|Crabbings") & is.na(FishingType), "Crabbing", FishingType)) %>% 
+  mutate(FishingType = as.factor(FishingType)) %>% 
   dplyr::select(-FishingType_other)
 
 ## Bait or Lure
@@ -537,8 +546,140 @@ SB_Dat <- SB_Dat %>%
   mutate(BaitLure = ifelse(BaitLure %in% c("Lure", "Lures", "Middle/little jigs", "Nilsmaster lures", "Plastic lure"), "Lures", BaitLure)) %>% 
   mutate(BaitLure = ifelse(str_detect(BaitLure, "squid|Squid|Bait|bait|Chicken|heads|Cuttlefish|occy|Fish|Kangaroo|Herring|Lamb|Mule|Mules|Meulis|Meuli|Muley|Mullet|MUtton|Occie|Pilchards|cuttlefish
                                       Sandbar|Scaleys|gardies|Skirt|chicken|Whiting|Mueli|Mutton|Spleens|trevally"), "Bait", BaitLure)) %>% 
-  mutate(FishingType = as.factor(BaitLure))
+  mutate(BaitLure = as.factor(BaitLure))
 
+## Max Hook Depth
+SB_Dat <- SB_Dat %>%
+  dplyr::mutate(MaxHook = gsub("[:]|[\\]|[a-zA-Z]|[ ]", "", MaxHook)) %>%
+  dplyr::mutate(MaxHook = ifelse(MaxHook == "", NA, MaxHook)) %>%
+  dplyr::mutate(MaxHook = as.numeric(MaxHook))
+
+## Number of fish kept undamaged - multiplied up the number of cockles in kg by the average weight of a cockle (10g) 
+# For Harry's data, this is just all the fish that they caught 
+SB_Dat <- SB_Dat %>%
+  mutate(KeptUndam = ifelse(is.na(KeptUndam) & str_detect(KeptUndam_other, "[:digit:]")|KeptUndam==0 & str_detect(KeptUndam_other, "[:digit:]"), KeptUndam_other, KeptUndam)) %>% 
+  mutate(KeptUndam = ifelse(KeptUndam_other %in% "Kg", 300, KeptUndam)) %>% 
+  mutate(Comments = ifelse(KeptUndam_other %in% c("Kg", "Crabs", "None at second site"), paste(KeptUndam_other, Comments, sep = "|"), Comments)) %>% 
+  mutate(KeptUndam = as.numeric(KeptUndam)) %>% 
+  dplyr::select(-KeptUndam_other) %>% 
+  relocate(KeptUndam, .before="RelUndam")
+
+## Number of fish released undamaged 
+SB_Dat <- SB_Dat %>% 
+  mutate(RelUndam = ifelse(is.na(RelUndam) & str_detect(RelUndam_other, "[:digit:]")|RelUndam==0 & str_detect(RelUndam_other, "[:digit:]")
+                           |str_detect(RelUndam, "Other") & str_detect(RelUndam_other, "[:digit:]"), RelUndam_other, RelUndam)) %>%
+  mutate(Comments = ifelse(grepl("[:alnum:]", RelUndam_other), paste(RelUndam_other, Comments, sep = "|"), Comments)) %>% 
+  mutate(RelUndam = as.numeric(RelUndam)) %>% 
+  dplyr::select(-RelUndam_other)
+
+## Number of fish caught undamaged
+SB_Dat <- SB_Dat %>% 
+  mutate(KeptUndam = ifelse(is.na(KeptUndam), 0, KeptUndam)) %>% 
+  mutate(RelUndam = ifelse(is.na(RelUndam), 0, RelUndam)) %>% 
+  mutate(nCaught = ifelse(Date<"2018-08-08", KeptUndam, NA)) %>% 
+  mutate(nCaught = ifelse(Date>"2021-09-27", KeptUndam+RelUndam, nCaught)) %>% 
+  mutate(nCaught = ifelse(UseComments %in% c("Caught 6 butter fish that was used as bait"), nCaught+6, nCaught)) %>% 
+  relocate(nCaught, .after="RelUndam") %>% 
+  mutate(nCaught = as.numeric(nCaught))
+
+## Number of fish depredated
+SB_Dat <- SB_Dat %>%
+  dplyr::mutate(Comments = ifelse(!is.na(nDP_other), paste(nDP_other, Comments, sep ="|"), Comments)) %>%
+  dplyr::mutate(nDP = as.numeric(nDP)) %>% 
+  dplyr::mutate(nDP = ifelse(is.na(nDP), 0, nDP)) %>% 
+  relocate(nDP, .before="nDP_other") %>% 
+  dplyr::select(-nDP_other)
+
+## Total number of fish hooked
+SB_Dat <- SB_Dat %>% 
+  mutate(nHooked = nCaught+nDP) %>% 
+  relocate(nHooked, .after="RelUndam") %>% 
+  mutate(KeptUndam = ifelse(Date<"2018-08-08", NA, KeptUndam)) %>% 
+  mutate(RelUndam = ifelse(Date<"2018-08-08", NA, RelUndam)) %>% 
+  mutate(nHooked = as.numeric(nHooked))
+
+## Percentage depredation
+SB_Dat <- SB_Dat %>% 
+  dplyr::mutate(perDP = (nDP/nHooked)*100, perDP) %>%
+  dplyr::mutate(perDP = ifelse(is.nan(perDP), "0", perDP)) %>%
+  mutate(perDP = ifelse(nHooked==0, NA, perDP)) %>%  
+  dplyr::mutate(perDP = as.numeric(perDP)) %>%
+  dplyr::relocate(perDP, .after = nDP) 
+
+# Binary presence or absence of depredation
+SB_Dat <- SB_Dat %>%
+  mutate(DP = ifelse(nDP > 0, "1", "0")) %>%
+  mutate(DP = ifelse(nHooked==0, NA, DP)) %>% 
+  relocate(DP, .after = nCaught)
+
+## Rates per hour
+# Number of fish caught undamaged per hour
+SB_Dat <- SB_Dat %>%
+  dplyr::mutate(nUndamHr = nCaught/DecFishingHr) %>%
+  dplyr::mutate(nUndamHr = ifelse(is.nan(nUndamHr), "0", nUndamHr)) %>%
+  dplyr::mutate(nUndamHr = ifelse(is.infinite(nUndamHr), "0", nUndamHr)) %>%
+  dplyr::mutate(nUndamHr = as.numeric(nUndamHr)) %>%
+  dplyr::relocate(nUndamHr, .after = perDP)
+
+# Number of fish depredated per hour
+SB_Dat <- SB_Dat %>%
+  dplyr::mutate(nDPHr = nDP/DecFishingHr) %>%
+  dplyr::mutate(nDPHr = ifelse(is.nan(nDPHr), "0", nDPHr)) %>%
+  dplyr::mutate(nDPHr = as.numeric(nDPHr)) %>%
+  dplyr::relocate(nDPHr, .after = nUndamHr)
+
+# Total fish hooked per hour
+SB_Dat <- SB_Dat %>%
+  dplyr::mutate(nHookedHr = nHooked/DecFishingHr) %>%
+  dplyr::mutate(nHookedHr = ifelse(is.infinite(nHookedHr), "0", nHookedHr)) %>%
+  dplyr::mutate(nHookedHr = as.numeric(nHookedHr)) %>%
+  dplyr::relocate(nHookedHr, .after = nDPHr)
+
+# Depredation rate per hour
+SB_Dat <- SB_Dat %>%
+  dplyr::mutate(DPrateHr = nDPHr/nHookedHr) %>%
+  dplyr::mutate(DPrateHr = ifelse(is.nan(DPrateHr), "0", DPrateHr)) %>%
+  dplyr::mutate(DPrateHr = as.numeric(DPrateHr)) %>%
+  dplyr::relocate(DPrateHr, .after = nHookedHr)
+
+## Species
+SB_Dat <- SB_Dat %>%
+  mutate(Emperors = ifelse(str_detect(Species, "blue lined|blue line|black snapper|spangled|Spangled|spango|Spango|Spangley|spangley|spangly|Grassy|red spot|Long nose|Long tongs|REd emp|Red emperor|Red lipped
+                                      |Blue lined emp|Blue lines emp|Emperors|Emporer|slang emperor|norwester|nor west snapper|empowr|Blackie|grass|Spano|blue dots|grassies"), 1, NA)) %>% 
+  mutate(Nearshore = ifelse(str_detect(Species, "Whiting|Bonefish|wrasse|grunter|Mullaway|Mullet|Mulloway|wrasses|Trumpeter|Mullie|trumpet|morning"), 1, NA)) %>% 
+  mutate(Cods_Trouts_Groupers = ifelse(str_detect(Species, "estuarine cod|Charlie|charlie|rock cod|rockcod|sweetlips|coral|Coral|honeycomb|Honeycomb|honey|Honey|rankin|Coronation|coronation|nanny|Chinaman|chinamen|chinaman
+                                                  |cod|Cod|Cud’s|code"), 1, NA)) %>% 
+  mutate(Snappers = ifelse(str_detect(Species, "Rims on|Red throat|Flag|flags|Ruby|Goldband|goldband|Goldban|Gold band||Golden band|gold and|Mangrove|mangrove|Jack|jack|Red snapper|Spainish|Striped sea|stripey sera
+                                      |fingermark bream|gold stripe|finger|finger markperch"), 1, NA)) %>% 
+  mutate(Breams = ifelse(str_detect(Species, "Robinson's|seabream|Seabream|Pink bream|thredfin|threadfin|Tarwine"), 1, NA)) %>% 
+  mutate(Perch = ifelse(str_detect(Species, "Pearl perch|Dhufish|dhufosh|pirch|markperch"), 1, NA)) %>% 
+  mutate(Pelagic = ifelse(str_detect(Species, "black marlin|sailfish|Marlin|barracude|trevally|Trevally|trivali|trevallu|Cobia|Kobe|Obie|queenie|Queenie|queen|tuna|Yellowfin|mackerel|Mackerel|mackrel|Mackeral|mac,real|Mackey
+                                     |Mahi|bludger|Wahoo|Waco|Trailer|Taylor|amberjacks|benido|Mackie|Macki|covier|mackerek|Yellow tail"), 1, NA)) %>% 
+  mutate(Flatheads_Cobblers = ifelse(str_detect(Species, "Cobbler|Flathead|Flatty|catfish|Northern flathead|Sandbar flathead"), 1, NA)) %>% 
+  mutate(Pigfish_Tuskfish_Parrotfish = ifelse(str_detect(Species, "blue bone|black spot|parrot|vine|Blue bone|Bald|bald|baldchin|Baldchin|Balding"), 1, NA)) %>% 
+  mutate(Cephalopods_Crustaceans_Molluscs = ifelse(str_detect(Species, "Squid|squid|Squids|squids|Prawn|prawn|Prawns|prawns|Cockle|swimmer|crab|Manna|swimmers|crabs|manna|calamari|mana|crabs|Cray fish"), 1, NA)) %>% 
+  mutate(Others = ifelse(str_detect(Species, "Blowfish|Blowly|northwest|Damsel|Leather jacket|Lizard fish|Shark|Whalers|shark|salmon|Butter|catfish|Gray|puffer|Garfish"), 1, NA)) %>% 
+  relocate(Emperors, .after=Species) %>% 
+  relocate(Snappers, .after=Emperors) %>% 
+  relocate(Breams, .after=Snappers) %>% 
+  relocate(Nearshore, .after=Snappers) %>% 
+  relocate(Cods_Trouts_Groupers, .after=Breams) %>% 
+  relocate(Perch, .after=Cods_Trouts_Groupers) %>% 
+  relocate(Pelagic, .after=Perch) %>% 
+  relocate(Flatheads_Cobblers, .after=Pelagic) %>% 
+  relocate(Pigfish_Tuskfish_Parrotfish, .after=Flatheads_Cobblers) %>% 
+  relocate(Cephalopods_Crustaceans_Molluscs, .after=Pigfish_Tuskfish_Parrotfish) %>% 
+  relocate(Others, .after=Cephalopods_Crustaceans_Molluscs)
+
+## Reasons for leaving 
+SB_Dat <- SB_Dat %>% 
+  mutate(exWhyLeave = ifelse(exWhyLeave_other %in% c("Necessity", "Necessity ", "Need to go to work.", "Wife would kill me."), "Necessity", exWhyLeave)) %>% 
+  mutate(exWhyLeave = ifelse(exWhyLeave_other %in% c("Bag limit", "Bagged out", "Trip limit"), "FisheriesRegLimit", exWhyLeave)) %>% 
+  mutate(exWhyLeave = ifelse(exWhyLeave_other %in% c("Got a feed"), "EndofDay", exWhyLeave)) %>% 
+  mutate(exWhyLeave = ifelse(exWhyLeave_other %in% c("Too small", "Want to catch a pink"), "LowCatch", exWhyLeave)) %>% 
+  mutate(Comments = ifelse(grepl("[:alnum:]", exWhyLeave_other), paste(exWhyLeave_other, Comments, sep = "|"), Comments)) %>% 
+  dplyr::select(-exWhyLeave_other)
+  
 #### Fisher Demographics #####
 
 ## Year born - for some reason one of the dates is coming up at 198
@@ -557,27 +698,23 @@ SB_Dat2 <- SB_Dat %>%
   mutate(exYrs = ifelse(exYrs!="", exYrs, NA)) %>%
   relocate(exYrs, FishLife, FishOcc, .after = YrBorn) 
 
-## Max Hook Depth
 
-## Catch Rates and Stats
+#### Other  Covariates ####
 
-## Depredation Stats
-
-## Rates per hour
-
-## Species
-
-## Reasons for leaving 
-
-## Boat Length
-
-## Boat Type
+## Consolidate Comments
+SB_Dat <- SB_Dat %>% 
+  mutate(Comments = ifelse(!is.na(UseComments), paste(UseComments, Comments, sp = "|"), Comments)) %>% 
+  dplyr::select(-UseComments)
 
 ## Lunar Phase
+SB_Dat <- SB_Dat %>%
+  mutate(LunarPhase = lunar.phase(Date, name = TRUE)) %>%
+  mutate(LunarPhase = as.factor(LunarPhase)) %>%
+  mutate(LunarPhase = as.factor(LunarPhase))
 
 ## Save Data
-
-
+setwd(clean_dir)
+write.csv(SB_Dat, "Full_Clean_SB.csv", row.names=FALSE)
 
 
 
